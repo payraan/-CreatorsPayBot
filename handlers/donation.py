@@ -14,12 +14,12 @@ async def donate_start(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     await state.set_state(DonationFlow.selecting_amount)
     
-    text = """💎 **مبلغ حمایت را انتخاب کنید:**
+    text = """💎 <b>مبلغ حمایت را انتخاب کنید:</b>
 
 چقدر دوست داری انرژی بدی؟
 (مبالغ به تتر USDT هستند)"""
     
-    await callback.message.edit_text(text, reply_markup=get_amount_keyboard(), parse_mode="Markdown")
+    await callback.message.edit_text(text, reply_markup=get_amount_keyboard(), parse_mode="HTML")
 
 @router.callback_query(F.data == "back_to_start")
 async def back_to_start(callback: CallbackQuery, state: FSMContext):
@@ -30,19 +30,19 @@ async def back_to_start(callback: CallbackQuery, state: FSMContext):
 
 👇 یکی از گزینه‌ها رو انتخاب کن:"""
     
-    await callback.message.edit_text(text, reply_markup=get_start_keyboard(), parse_mode="Markdown")
+    await callback.message.edit_text(text, reply_markup=get_start_keyboard(), parse_mode="HTML")
 
 @router.callback_query(F.data == "back_to_amount")
 async def back_to_amount(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     await state.set_state(DonationFlow.selecting_amount)
     
-    text = """💎 **مبلغ حمایت را انتخاب کنید:**
+    text = """💎 <b>مبلغ حمایت را انتخاب کنید:</b>
 
 چقدر دوست داری انرژی بدی؟
 (مبالغ به تتر USDT هستند)"""
     
-    await callback.message.edit_text(text, reply_markup=get_amount_keyboard(), parse_mode="Markdown")
+    await callback.message.edit_text(text, reply_markup=get_amount_keyboard(), parse_mode="HTML")
 
 @router.callback_query(F.data.startswith("amount_"))
 async def select_amount(callback: CallbackQuery, state: FSMContext):
@@ -57,14 +57,14 @@ async def select_amount(callback: CallbackQuery, state: FSMContext):
     await state.update_data(amount=amount)
     await state.set_state(DonationFlow.selecting_network)
     
-    text = f"""🌐 **انتخاب شبکه پرداخت:**
+    text = f"""🌐 <b>انتخاب شبکه پرداخت:</b>
 
-مبلغ: **{amount} USDT**
+مبلغ: <b>{amount} USDT</b>
 
 لطفاً شبکه‌ای که می‌خواهید با آن واریز کنید را انتخاب کنید.
 ⚠️ حتماً در کیف پول خودتان هم همین شبکه را انتخاب کنید."""
     
-    await callback.message.edit_text(text, reply_markup=get_network_keyboard(amount), parse_mode="Markdown")
+    await callback.message.edit_text(text, reply_markup=get_network_keyboard(amount), parse_mode="HTML")
 
 @router.message(DonationFlow.custom_amount)
 async def custom_amount(message: Message, state: FSMContext):
@@ -80,13 +80,13 @@ async def custom_amount(message: Message, state: FSMContext):
     await state.update_data(amount=amount)
     await state.set_state(DonationFlow.selecting_network)
     
-    text = f"""🌐 **انتخاب شبکه پرداخت:**
+    text = f"""🌐 <b>انتخاب شبکه پرداخت:</b>
 
-مبلغ: **{amount} USDT**
+مبلغ: <b>{amount} USDT</b>
 
 لطفاً شبکه‌ای که می‌خواهید با آن واریز کنید را انتخاب کنید."""
     
-    await message.answer(text, reply_markup=get_network_keyboard(amount), parse_mode="Markdown")
+    await message.answer(text, reply_markup=get_network_keyboard(amount), parse_mode="HTML")
 
 @router.callback_query(F.data.startswith("net_"))
 async def select_network(callback: CallbackQuery, state: FSMContext):
@@ -113,21 +113,21 @@ async def select_network(callback: CallbackQuery, state: FSMContext):
     await state.update_data(ref_code=ref_code, network=network, creator_name=creator['name'])
     await state.set_state(DonationFlow.waiting_for_txid)
     
-    text = f"""🧾 **فاکتور پرداخت**
+    text = f"""🧾 <b>فاکتور پرداخت</b>
 
-🔸 **مبلغ:** {amount} USDT
-🔸 **شبکه:** {network}
-🆔 **کد پیگیری:** `{ref_code}`
+🔸 <b>مبلغ:</b> {amount} USDT
+🔸 <b>شبکه:</b> {network}
+🆔 <b>کد پیگیری:</b> <code>{ref_code}</code>
 
-👇 **آدرس کیف پول (کلیک کنید تا کپی شود):**
-`{wallet}`
+👇 <b>آدرس کیف پول (کلیک کنید تا کپی شود):</b>
+<code>{wallet}</code>
 
-⚠️ **مراحل نهایی:**
+⚠️ <b>مراحل نهایی:</b>
 ۱. مبلغ را به آدرس بالا واریز کنید.
-۲. **هش تراکنش (TXID)** یا **اسکرین‌شات رسید** را همینجا ارسال کنید.
+۲. <b>هش تراکنش (TXID)</b> یا <b>اسکرین‌شات رسید</b> را همینجا ارسال کنید.
 ۳. تا زمان تایید ادمین صبر کنید."""
     
-    await callback.message.edit_text(text, reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
+    await callback.message.edit_text(text, reply_markup=get_cancel_keyboard(), parse_mode="HTML")
 
 @router.callback_query(F.data == "cancel_tx")
 async def cancel_transaction(callback: CallbackQuery, state: FSMContext):
@@ -146,16 +146,15 @@ async def receive_photo_proof(message: Message, state: FSMContext, bot: Bot):
     photo_id = message.photo[-1].file_id
     await db.update_transaction_proof(ref_code, "SCREENSHOT", photo_id)
     
-    # اطلاع به ادمین
     await notify_admin(bot, message.from_user.id, message.from_user.username, creator_name, amount, network, ref_code, "SCREENSHOT", photo_id)
     
     await state.clear()
-    await message.answer(f"""✅ **رسید شما دریافت شد!**
+    await message.answer(f"""✅ <b>رسید شما دریافت شد!</b>
 
-🆔 کد پیگیری: `{ref_code}`
+🆔 کد پیگیری: <code>{ref_code}</code>
 
 لطفاً منتظر تایید ادمین باشید.
-پس از تایید، پیام دریافت خواهید کرد.""", parse_mode="Markdown")
+پس از تایید، پیام دریافت خواهید کرد.""", parse_mode="HTML")
 
 @router.message(DonationFlow.waiting_for_txid, F.text)
 async def receive_text_proof(message: Message, state: FSMContext, bot: Bot):
@@ -167,13 +166,12 @@ async def receive_text_proof(message: Message, state: FSMContext, bot: Bot):
     
     await db.update_transaction_proof(ref_code, "TXID", message.text)
     
-    # اطلاع به ادمین
     await notify_admin(bot, message.from_user.id, message.from_user.username, creator_name, amount, network, ref_code, "TXID", message.text)
     
     await state.clear()
-    await message.answer(f"""✅ **هش تراکنش شما دریافت شد!**
+    await message.answer(f"""✅ <b>هش تراکنش شما دریافت شد!</b>
 
-🆔 کد پیگیری: `{ref_code}`
+🆔 کد پیگیری: <code>{ref_code}</code>
 
 لطفاً منتظر تایید ادمین باشید.
-پس از تایید، پیام دریافت خواهید کرد.""", parse_mode="Markdown")
+پس از تایید، پیام دریافت خواهید کرد.""", parse_mode="HTML")
