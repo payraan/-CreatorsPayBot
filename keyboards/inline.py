@@ -5,7 +5,7 @@ def get_start_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💸 حمایت مالی", callback_data="donate_start")],
         [InlineKeyboardButton(text="👤 پروفایل من", callback_data="my_profile")],
-        [InlineKeyboardButton(text="📞 پشتیبانی", url="https://t.me/AmirSupport")]
+        [InlineKeyboardButton(text="📞 پشتیبانی", url="https://t.me/Narmoon_support")]
     ])
 
 def get_amount_keyboard():
@@ -36,4 +36,9 @@ def get_network_keyboard(amount: int):
 def get_cancel_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❌ انصراف", callback_data="cancel_tx")]
+    ])
+
+def get_profile_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 بازگشت", callback_data="back_to_start")]
     ])

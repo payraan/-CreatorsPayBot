@@ -1,5 +1,6 @@
 from aiogram import Router, F, Bot
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.filters import Command
 from config import ADMIN_ID
 from database import db
 
@@ -12,7 +13,6 @@ def get_admin_keyboard(ref_code: str):
     ])
 
 async def notify_admin(bot: Bot, user_id: int, username: str, creator_name: str, amount: float, network: str, ref_code: str, proof_type: str, proof_value: str):
-    # اگر username نداشت، فقط ID نشون بده
     user_display = f"@{username}" if username else "بدون یوزرنیم"
     
     text = f"""🚨 تراکنش جدید نیاز به بررسی!
@@ -63,3 +63,85 @@ async def reject_transaction(callback: CallbackQuery, bot: Bot):
     
     await callback.answer("❌ رد شد!")
     await callback.message.edit_reply_markup(reply_markup=None)
+
+@router.message(Command("check_debt"))
+async def check_debt(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    
+    args = message.text.split()
+    if len(args) < 2:
+        await message.answer("❌ استفاده: /check_debt [slug]\n\nمثال: /check_debt skillvid")
+        return
+    
+    slug = args[1]
+    debt_info = await db.get_creator_debt(slug)
+    
+    if not debt_info:
+        await message.answer(f"❌ یوتیوبر با slug '{slug}' یافت نشد.")
+        return
+    
+    total = float(debt_info['total_received']) if debt_info['total_received'] else 0
+    rate = float(debt_info['commission_rate'])
+    debt = total * (rate / 100)
+    
+    text = f"""📊 گزارش مالی: {debt_info['name']}
+
+💰 کل دریافتی تایید شده: {total} USDT
+📈 نرخ کمیسیون: {rate}%
+💵 بدهی به پلتفرم: {debt:.2f} USDT
+
+📅 تعداد تراکنش‌های تایید شده: {debt_info['approved_count']}"""
+    
+    await message.answer(text)
+
+@router.message(Command("add_creator"))
+async def add_creator(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    
+    await message.answer("""📝 برای اضافه کردن یوتیوبر، این فرمت رو بفرست:
+
+/newcreator
+slug: نام_انگلیسی
+name: نام نمایشی
+wallet_bsc: آدرس BSC
+wallet_polygon: آدرس Polygon
+wallet_tron: آدرس Tron
+
+مثال:
+/newcreator
+slug: skillvid
+name: اسکیل وید
+wallet_bsc: 0x123...
+wallet_polygon: 0x456...
+wallet_tron: TXyz...""")
+
+@router.message(Command("newcreator"))
+async def new_creator(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    
+    try:
+        lines = message.text.split('\n')[1:]
+        data = {}
+        for line in lines:
+            if ':' in line:
+                key, value = line.split(':', 1)
+                data[key.strip().lower()] = value.strip()
+        
+        required = ['slug', 'name', 'wallet_bsc', 'wallet_polygon', 'wallet_tron']
+        for field in required:
+            if field not in data:
+                await message.answer(f"❌ فیلد '{field}' وارد نشده.")
+                return
+        
+        await db.add_creator(data['slug'], data['name'], data['wallet_bsc'], data['wallet_polygon'], data['wallet_tron'])
+        
+        await message.answer(f"""✅ یوتیوبر جدید اضافه شد!
+
+🔗 لینک: t.me/CreatorsPayBot?start={data['slug']}
+📛 نام: {data['name']}""")
+    
+    except Exception as e:
+        await message.answer(f"❌ خطا: {str(e)}")

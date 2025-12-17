@@ -75,5 +75,49 @@ class Database:
                 SET status = 'REJECTED'
                 WHERE ref_code = $1
             """, ref_code)
+    
+    async def get_user_donations(self, telegram_id: int):
+        async with self.pool.acquire() as conn:
+            return await conn.fetch("""
+                SELECT t.amount_expected, t.status, t.created_at, c.name as creator_name
+                FROM transactions t
+                JOIN users u ON t.user_id = u.id
+                JOIN creators c ON t.creator_id = c.id
+                WHERE u.telegram_id = $1
+                ORDER BY t.created_at DESC
+                LIMIT 10
+            """, telegram_id)
+    
+    async def get_user_stats(self, telegram_id: int):
+        async with self.pool.acquire() as conn:
+            return await conn.fetchrow("""
+                SELECT 
+                    COUNT(*) as total_donations,
+                    COALESCE(SUM(CASE WHEN status = 'APPROVED' THEN amount_received ELSE 0 END), 0) as total_amount
+                FROM transactions t
+                JOIN users u ON t.user_id = u.id
+                WHERE u.telegram_id = $1
+            """, telegram_id)
+    
+    async def get_creator_debt(self, slug: str):
+        async with self.pool.acquire() as conn:
+            return await conn.fetchrow("""
+                SELECT 
+                    c.name,
+                    c.commission_rate,
+                    COALESCE(SUM(t.amount_received), 0) as total_received,
+                    COUNT(CASE WHEN t.status = 'APPROVED' THEN 1 END) as approved_count
+                FROM creators c
+                LEFT JOIN transactions t ON c.id = t.creator_id AND t.status = 'APPROVED'
+                WHERE c.slug = $1
+                GROUP BY c.id, c.name, c.commission_rate
+            """, slug)
+    
+    async def add_creator(self, slug: str, name: str, wallet_bsc: str, wallet_polygon: str, wallet_tron: str):
+        async with self.pool.acquire() as conn:
+            await conn.execute("""
+                INSERT INTO creators (slug, name, wallet_bsc, wallet_polygon, wallet_tron)
+                VALUES ($1, $2, $3, $4, $5)
+            """, slug, name, wallet_bsc, wallet_polygon, wallet_tron)
 
 db = Database()
