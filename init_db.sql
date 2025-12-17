@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS creators (
     wallet_tron VARCHAR(255),
     commission_rate DECIMAL(5,2) DEFAULT 5.0,
     is_active BOOLEAN DEFAULT TRUE,
+    telegram_id BIGINT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -36,4 +37,18 @@ CREATE TABLE IF NOT EXISTS transactions (
     CONSTRAINT chk_status CHECK (
         status IN ('PENDING_TXID', 'PENDING_REVIEW', 'APPROVED', 'REJECTED')
     )
+);
+
+-- جدول درخواست‌های اسپانسرینگ
+CREATE TABLE IF NOT EXISTS sponsor_leads (
+    id SERIAL PRIMARY KEY,
+    creator_id INT REFERENCES creators(id),
+    sponsor_name VARCHAR(255) NOT NULL,
+    contact_info VARCHAR(255) NOT NULL,
+    budget_range VARCHAR(50),
+    description TEXT,
+    sponsor_tg_id BIGINT,
+    assigned_to INT REFERENCES creators(id),
+    status VARCHAR(50) DEFAULT 'NEW',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
