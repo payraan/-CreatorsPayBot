@@ -1,3 +1,4 @@
+import html
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
@@ -23,7 +24,7 @@ async def start_sponsorship(callback: CallbackQuery, state: FSMContext):
     if creator_slug:
         creator = await db.get_creator_by_slug(creator_slug)
         if creator:
-            text = f"🏢 <b>درخواست همکاری با {creator['name']}</b>\n\nلطفاً <b>نام برند یا شرکت</b> خود را بنویسید:"
+            text = f"🏢 <b>درخواست همکاری با {html.escape(creator['name'])}</b>\n\nلطفاً <b>نام برند یا شرکت</b> خود را بنویسید:"
         
     await callback.message.edit_text(text, reply_markup=get_sponsor_cancel_keyboard(), parse_mode="HTML")
 
@@ -79,18 +80,18 @@ async def finish_sponsorship(message: Message, state: FSMContext, bot: Bot):
     await message.answer("✅ <b>درخواست شما ثبت شد!</b>\n\nتیم ما به زودی درخواست را بررسی و با شما تماس می‌گیرد.", reply_markup=get_start_keyboard(target_slug), parse_mode="HTML")
     await state.clear()
     
-    target_text = f"یوتیوبر: {target_slug}" if target_slug else "کمپین عمومی"
+    target_text = f"یوتیوبر: {html.escape(target_slug)}" if target_slug else "کمپین عمومی"
     
     admin_text = f"""🚨 <b>درخواست اسپانسرینگ جدید (#{lead_id})</b>
 
-🏢 <b>برند:</b> {data.get('name')}
+🏢 <b>برند:</b> {html.escape(data.get('name', ''))}
 💰 <b>بودجه:</b> {data.get('budget')}
-📞 <b>تماس:</b> {data.get('contact')}
-👤 <b>اسپانسر:</b> <a href="tg://user?id={message.from_user.id}">{message.from_user.first_name}</a>
+📞 <b>تماس:</b> {html.escape(data.get('contact', ''))}
+👤 <b>اسپانسر:</b> <a href="tg://user?id={message.from_user.id}">{html.escape(message.from_user.first_name or 'کاربر')}</a>
 🎯 <b>هدف:</b> {target_text}
 
 📝 <b>توضیحات:</b>
-{message.text}"""
+{html.escape(message.text)}"""
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ تایید و ارسال به یوتیوبر", callback_data=f"lead:approve:{lead_id}")],

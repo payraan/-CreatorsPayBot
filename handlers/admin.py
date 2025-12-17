@@ -1,3 +1,4 @@
+import html
 from aiogram import Router, F, Bot
 from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
@@ -17,8 +18,8 @@ async def notify_admin(bot: Bot, user_id: int, username: str, creator_name: str,
     
     text = f"""🚨 تراکنش جدید نیاز به بررسی!
 
-👤 کاربر: {user_display} (ID: {user_id})
-🎬 برای: {creator_name}
+👤 کاربر: {html.escape(user_display)} (ID: {user_id})
+🎬 برای: {html.escape(creator_name)}
 💰 مبلغ: {amount} USDT
 🌐 شبکه: {network}
 🆔 کد پیگیری: {ref_code}
@@ -28,7 +29,7 @@ async def notify_admin(bot: Bot, user_id: int, username: str, creator_name: str,
     if proof_type == "SCREENSHOT":
         await bot.send_photo(ADMIN_CHAT_ID, proof_value, caption=text, reply_markup=get_admin_keyboard(ref_code))
     else:
-        text += f"\n{proof_value}"
+        text += f"\n{html.escape(proof_value)}"
         await bot.send_message(ADMIN_CHAT_ID, text, reply_markup=get_admin_keyboard(ref_code))
 
 @router.callback_query(F.data.startswith("adm:approve:"))
@@ -78,14 +79,14 @@ async def check_debt(message: Message):
     debt_info = await db.get_creator_debt(slug)
     
     if not debt_info:
-        await message.answer(f"❌ یوتیوبر با slug '{slug}' یافت نشد.")
+        await message.answer(f"❌ یوتیوبر با slug '{html.escape(slug)}' یافت نشد.")
         return
     
     total = float(debt_info['total_received']) if debt_info['total_received'] else 0
     rate = float(debt_info['commission_rate'])
     debt = total * (rate / 100)
     
-    text = f"""📊 گزارش مالی: {debt_info['name']}
+    text = f"""📊 گزارش مالی: {html.escape(debt_info['name'])}
 
 💰 کل دریافتی تایید شده: {total} USDT
 📈 نرخ کمیسیون: {rate}%
@@ -140,11 +141,11 @@ async def new_creator(message: Message):
         
         await message.answer(f"""✅ یوتیوبر جدید اضافه شد!
 
-🔗 لینک: t.me/CreatorsPayBot?start={data['slug']}
-📛 نام: {data['name']}""")
+🔗 لینک: t.me/CreatorsPayBot?start={html.escape(data['slug'])}
+📛 نام: {html.escape(data['name'])}""")
     
     except Exception as e:
-        await message.answer(f"❌ خطا: {str(e)}")
+        await message.answer(f"❌ خطا: {html.escape(str(e))}")
 
 # --- بخش اسپانسرینگ ---
 @router.callback_query(F.data.startswith("lead:approve:"))
@@ -158,9 +159,9 @@ async def approve_lead(callback: CallbackQuery, bot: Bot):
 
 یک برند تمایل به همکاری با شما دارد.
 
-🏢 <b>برند:</b> {lead['sponsor_name']}
+🏢 <b>برند:</b> {html.escape(lead['sponsor_name'])}
 💰 <b>بودجه:</b> {lead['budget_range']}
-📝 <b>توضیحات:</b> {lead['description']}
+📝 <b>توضیحات:</b> {html.escape(lead['description'] or '')}
 
 👇 برای هماهنگی و پذیرش، به پشتیبانی پیام دهید:
 @Narmoon_support"""
@@ -169,7 +170,7 @@ async def approve_lead(callback: CallbackQuery, bot: Bot):
             await bot.send_message(lead['creator_tg_id'], text_creator, parse_mode="HTML")
             await db.update_lead_status(lead_id, "SENT_TO_CREATOR")
             await callback.answer("✅ ارسال شد!")
-            await callback.message.edit_text(f"{callback.message.text}\n\n✅ <b>تایید و برای {lead['creator_name']} ارسال شد.</b>", parse_mode="HTML")
+            await callback.message.edit_text(f"{callback.message.text}\n\n✅ <b>تایید و برای {html.escape(lead['creator_name'] or '')} ارسال شد.</b>", parse_mode="HTML")
         except Exception as e:
             await callback.answer(f"خطا در ارسال: {str(e)}", show_alert=True)
     else:
