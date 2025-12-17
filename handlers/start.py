@@ -25,14 +25,14 @@ async def cmd_start(message: Message, state: FSMContext):
 اینجا می‌تونی مستقیم، بدون واسطه و با کریپتو از تولیدکننده محتوای مورد علاقه‌ت حمایت کنی. ❤️
 
 👇 یکی از گزینه‌ها رو انتخاب کن:"""
-            await message.answer(text, reply_markup=get_start_keyboard(), parse_mode="HTML")
+            await message.answer(text, reply_markup=get_start_keyboard(creator_slug=slug), parse_mode="HTML")
             return
     
     text = """👋 سلام!
 
 به <b>CreatorPay</b> خوش آمدید.
 برای حمایت از یوتیوبر مورد علاقه‌ات، از لینک اختصاصی اون استفاده کن."""
-    await message.answer(text, parse_mode="HTML")
+    await message.answer(text, reply_markup=get_start_keyboard(), parse_mode="HTML")
 
 @router.callback_query(F.data == "my_profile")
 async def my_profile(callback: CallbackQuery):
@@ -61,3 +61,16 @@ async def my_profile(callback: CallbackQuery):
         text += "📜 هنوز دونیتی انجام ندادی!"
     
     await callback.message.edit_text(text, reply_markup=get_profile_keyboard(), parse_mode="HTML")
+
+@router.callback_query(F.data == "back_to_start")
+async def back_to_start(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    
+    data = await state.get_data()
+    creator_slug = data.get("creator_slug")
+    
+    text = """👋 سلام!
+
+👇 یکی از گزینه‌ها رو انتخاب کن:"""
+    
+    await callback.message.edit_text(text, reply_markup=get_start_keyboard(creator_slug=creator_slug), parse_mode="HTML")

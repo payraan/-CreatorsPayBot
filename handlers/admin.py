@@ -1,7 +1,7 @@
 from aiogram import Router, F, Bot
 from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
-from config import ADMIN_ID
+from config import ADMIN_ID, ADMIN_CHAT_ID
 from database import db
 
 router = Router()
@@ -26,10 +26,10 @@ async def notify_admin(bot: Bot, user_id: int, username: str, creator_name: str,
 🧾 مدرک ارسال شده: {proof_type}"""
 
     if proof_type == "SCREENSHOT":
-        await bot.send_photo(ADMIN_ID, proof_value, caption=text, reply_markup=get_admin_keyboard(ref_code))
+        await bot.send_photo(ADMIN_CHAT_ID, proof_value, caption=text, reply_markup=get_admin_keyboard(ref_code))
     else:
         text += f"\n{proof_value}"
-        await bot.send_message(ADMIN_ID, text, reply_markup=get_admin_keyboard(ref_code))
+        await bot.send_message(ADMIN_CHAT_ID, text, reply_markup=get_admin_keyboard(ref_code))
 
 @router.callback_query(F.data.startswith("adm:approve:"))
 async def approve_transaction(callback: CallbackQuery, bot: Bot):
@@ -145,3 +145,41 @@ async def new_creator(message: Message):
     
     except Exception as e:
         await message.answer(f"❌ خطا: {str(e)}")
+
+# --- بخش اسپانسرینگ ---
+@router.callback_query(F.data.startswith("lead:approve:"))
+async def approve_lead(callback: CallbackQuery, bot: Bot):
+    lead_id = int(callback.data.split(":")[2])
+    
+    lead = await db.get_lead(lead_id)
+    
+    if lead['creator_tg_id']:
+        text_creator = f"""🎉 <b>پیشنهاد همکاری جدید!</b>
+
+یک برند تمایل به همکاری با شما دارد.
+
+🏢 <b>برند:</b> {lead['sponsor_name']}
+💰 <b>بودجه:</b> {lead['budget_range']}
+📝 <b>توضیحات:</b> {lead['description']}
+
+👇 برای هماهنگی و پذیرش، به پشتیبانی پیام دهید:
+@Narmoon_support"""
+        
+        try:
+            await bot.send_message(lead['creator_tg_id'], text_creator, parse_mode="HTML")
+            await db.update_lead_status(lead_id, "SENT_TO_CREATOR")
+            await callback.answer("✅ ارسال شد!")
+            await callback.message.edit_text(f"{callback.message.text}\n\n✅ <b>تایید و برای {lead['creator_name']} ارسال شد.</b>", parse_mode="HTML")
+        except Exception as e:
+            await callback.answer(f"خطا در ارسال: {str(e)}", show_alert=True)
+    else:
+        await db.update_lead_status(lead_id, "APPROVED_GENERAL")
+        await callback.answer("✅ تایید شد!")
+        await callback.message.edit_text(f"{callback.message.text}\n\n✅ <b>تایید شد (عمومی).</b>\nادمین دستی پیگیری کند.", parse_mode="HTML")
+
+@router.callback_query(F.data.startswith("lead:reject:"))
+async def reject_lead(callback: CallbackQuery):
+    lead_id = int(callback.data.split(":")[2])
+    await db.update_lead_status(lead_id, "REJECTED")
+    await callback.answer("❌ رد شد!")
+    await callback.message.edit_text(f"{callback.message.text}\n\n❌ <b>رد شد.</b>", parse_mode="HTML")

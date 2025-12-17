@@ -21,17 +21,6 @@ async def donate_start(callback: CallbackQuery, state: FSMContext):
     
     await callback.message.edit_text(text, reply_markup=get_amount_keyboard(), parse_mode="HTML")
 
-@router.callback_query(F.data == "back_to_start")
-async def back_to_start(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
-    await state.clear()
-    
-    text = """👋 سلام!
-
-👇 یکی از گزینه‌ها رو انتخاب کن:"""
-    
-    await callback.message.edit_text(text, reply_markup=get_start_keyboard(), parse_mode="HTML")
-
 @router.callback_query(F.data == "back_to_amount")
 async def back_to_amount(callback: CallbackQuery, state: FSMContext):
     await callback.answer()

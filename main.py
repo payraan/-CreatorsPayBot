@@ -3,7 +3,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from config import BOT_TOKEN
 from database import db
-from handlers import start, donation, admin
+from handlers import start, donation, admin, sponsorship
 
 async def main():
     await db.connect()
@@ -14,6 +14,7 @@ async def main():
     
     dp.include_router(start.router)
     dp.include_router(donation.router)
+    dp.include_router(sponsorship.router)
     dp.include_router(admin.router)
     
     print("Bot started!")

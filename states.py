@@ -5,3 +5,9 @@ class DonationFlow(StatesGroup):
     custom_amount = State()
     selecting_network = State()
     waiting_for_txid = State()
+
+class SponsorshipFlow(StatesGroup):
+    sponsor_name = State()
+    contact_info = State()
+    budget = State()
+    description = State()

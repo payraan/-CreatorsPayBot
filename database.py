@@ -119,5 +119,27 @@ class Database:
                 INSERT INTO creators (slug, name, wallet_bsc, wallet_polygon, wallet_tron)
                 VALUES ($1, $2, $3, $4, $5)
             """, slug, name, wallet_bsc, wallet_polygon, wallet_tron)
+    
+    # --- بخش اسپانسرینگ ---
+    async def add_lead(self, sponsor_name: str, contact: str, budget: str, desc: str, sponsor_tg_id: int, creator_id: int = None):
+        async with self.pool.acquire() as conn:
+            return await conn.fetchval("""
+                INSERT INTO sponsor_leads (sponsor_name, contact_info, budget_range, description, sponsor_tg_id, creator_id)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING id
+            """, sponsor_name, contact, budget, desc, sponsor_tg_id, creator_id)
+
+    async def get_lead(self, lead_id: int):
+        async with self.pool.acquire() as conn:
+            return await conn.fetchrow("""
+                SELECT l.*, c.name as creator_name, c.telegram_id as creator_tg_id, c.slug as creator_slug
+                FROM sponsor_leads l
+                LEFT JOIN creators c ON l.creator_id = c.id
+                WHERE l.id = $1
+            """, lead_id)
+
+    async def update_lead_status(self, lead_id: int, status: str):
+        async with self.pool.acquire() as conn:
+            await conn.execute("UPDATE sponsor_leads SET status = $2 WHERE id = $1", lead_id, status)
 
 db = Database()
