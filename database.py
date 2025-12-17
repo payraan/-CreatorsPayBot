@@ -1,12 +1,12 @@
 import asyncpg
-import os
+from config import DATABASE_URL
 
 class Database:
     def __init__(self):
         self.pool = None
     
     async def connect(self):
-        self.pool = await asyncpg.create_pool(os.getenv("DATABASE_URL"))
+        self.pool = await asyncpg.create_pool(DATABASE_URL)
     
     async def close(self):
         if self.pool:

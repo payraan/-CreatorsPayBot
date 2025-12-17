@@ -4,6 +4,7 @@ import os
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 # حداقل مبلغ برای هر شبکه (دلار)
 MIN_AMOUNTS = {
