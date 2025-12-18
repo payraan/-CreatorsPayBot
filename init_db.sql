@@ -6,17 +6,47 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- جدول یوتیوبرها
+-- جدول دسته‌بندی‌ها
+CREATE TABLE IF NOT EXISTS categories (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50) NOT NULL,
+    emoji VARCHAR(10),
+    slug VARCHAR(50) UNIQUE NOT NULL
+);
+
+-- دسته‌بندی‌های پیش‌فرض
+INSERT INTO categories (name, emoji, slug) VALUES
+    ('گیمینگ', '🎮', 'gaming'),
+    ('آشپزی', '🍳', 'cooking'),
+    ('تکنولوژی', '💻', 'tech'),
+    ('آموزشی', '📚', 'education'),
+    ('سرگرمی', '🎬', 'entertainment'),
+    ('لایف‌استایل', '💄', 'lifestyle'),
+    ('ورزشی', '⚽', 'sports'),
+    ('موسیقی', '🎵', 'music'),
+    ('سفر', '✈️', 'travel'),
+    ('کسب‌وکار', '💼', 'business')
+ON CONFLICT (slug) DO NOTHING;
+
+-- جدول کریتورها (یوتیوبر/اینستاگرامر)
 CREATE TABLE IF NOT EXISTS creators (
     id SERIAL PRIMARY KEY,
     slug VARCHAR(100) UNIQUE NOT NULL,
     name VARCHAR(255) NOT NULL,
+    platform VARCHAR(20) DEFAULT 'YOUTUBE',
+    category VARCHAR(50),
     wallet_bsc VARCHAR(255),
     wallet_polygon VARCHAR(255),
     wallet_tron VARCHAR(255),
     commission_rate DECIMAL(5,2) DEFAULT 5.0,
     is_active BOOLEAN DEFAULT TRUE,
+    is_public BOOLEAN DEFAULT FALSE,
     telegram_id BIGINT,
+    followers_count INT,
+    min_sponsor_price INT,
+    max_sponsor_price INT,
+    profile_link VARCHAR(255),
+    description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

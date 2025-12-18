@@ -12,13 +12,7 @@ class Database:
         if self.pool:
             await self.pool.close()
     
-    async def get_creator_by_slug(self, slug: str):
-        async with self.pool.acquire() as conn:
-            return await conn.fetchrow(
-                "SELECT * FROM creators WHERE slug = $1 AND is_active = TRUE",
-                slug
-            )
-    
+    # --- کاربران ---
     async def add_user(self, user_id: int, username: str):
         async with self.pool.acquire() as conn:
             await conn.execute("""
@@ -35,6 +29,97 @@ class Database:
             )
             return row['id'] if row else None
     
+    # --- کریتورها ---
+    async def get_creator_by_slug(self, slug: str):
+        async with self.pool.acquire() as conn:
+            return await conn.fetchrow(
+                "SELECT * FROM creators WHERE slug = $1 AND is_active = TRUE",
+                slug
+            )
+    
+    async def add_creator(self, slug: str, name: str, wallet_bsc: str, wallet_polygon: str, wallet_tron: str, platform: str = 'YOUTUBE'):
+        async with self.pool.acquire() as conn:
+            await conn.execute("""
+                INSERT INTO creators (slug, name, wallet_bsc, wallet_polygon, wallet_tron, platform)
+                VALUES ($1, $2, $3, $4, $5, $6)
+            """, slug, name, wallet_bsc, wallet_polygon, wallet_tron, platform)
+    
+    async def link_creator_telegram(self, slug: str, telegram_id: int) -> bool:
+        async with self.pool.acquire() as conn:
+            result = await conn.execute("""
+                UPDATE creators SET telegram_id = $2 WHERE slug = $1
+            """, slug, telegram_id)
+            return result != "UPDATE 0"
+    
+    async def update_creator_profile(self, slug: str, category: str, followers: int, min_price: int, max_price: int, profile_link: str, description: str, is_public: bool):
+        async with self.pool.acquire() as conn:
+            await conn.execute("""
+                UPDATE creators SET 
+                    category = $2,
+                    followers_count = $3,
+                    min_sponsor_price = $4,
+                    max_sponsor_price = $5,
+                    profile_link = $6,
+                    description = $7,
+                    is_public = $8
+                WHERE slug = $1
+            """, slug, category, followers, min_price, max_price, profile_link, description, is_public)
+    
+    async def get_all_creators(self):
+        async with self.pool.acquire() as conn:
+            return await conn.fetch("""
+                SELECT id, slug, name, platform, category, telegram_id, is_active, is_public
+                FROM creators
+                ORDER BY id DESC
+            """)
+    
+    async def get_public_creators(self, platform: str = None, category: str = None):
+        async with self.pool.acquire() as conn:
+            query = """
+                SELECT * FROM creators 
+                WHERE is_active = TRUE AND is_public = TRUE
+            """
+            params = []
+            param_count = 0
+            
+            if platform:
+                param_count += 1
+                query += f" AND platform = ${param_count}"
+                params.append(platform)
+            
+            if category:
+                param_count += 1
+                query += f" AND category = ${param_count}"
+                params.append(category)
+            
+            query += " ORDER BY followers_count DESC NULLS LAST"
+            
+            return await conn.fetch(query, *params)
+    
+    async def get_creator_debt(self, slug: str):
+        async with self.pool.acquire() as conn:
+            return await conn.fetchrow("""
+                SELECT 
+                    c.name,
+                    c.commission_rate,
+                    COALESCE(SUM(t.amount_received), 0) as total_received,
+                    COUNT(CASE WHEN t.status = 'APPROVED' THEN 1 END) as approved_count
+                FROM creators c
+                LEFT JOIN transactions t ON c.id = t.creator_id AND t.status = 'APPROVED'
+                WHERE c.slug = $1
+                GROUP BY c.id, c.name, c.commission_rate
+            """, slug)
+    
+    # --- دسته‌بندی‌ها ---
+    async def get_all_categories(self):
+        async with self.pool.acquire() as conn:
+            return await conn.fetch("SELECT * FROM categories ORDER BY id")
+    
+    async def get_category_by_slug(self, slug: str):
+        async with self.pool.acquire() as conn:
+            return await conn.fetchrow("SELECT * FROM categories WHERE slug = $1", slug)
+    
+    # --- تراکنش‌ها ---
     async def create_transaction(self, ref_code: str, user_id: int, creator_id: int, amount: float, network: str):
         async with self.pool.acquire() as conn:
             await conn.execute("""
@@ -71,9 +156,7 @@ class Database:
     async def reject_transaction(self, ref_code: str):
         async with self.pool.acquire() as conn:
             await conn.execute("""
-                UPDATE transactions 
-                SET status = 'REJECTED'
-                WHERE ref_code = $1
+                UPDATE transactions SET status = 'REJECTED' WHERE ref_code = $1
             """, ref_code)
     
     async def get_user_donations(self, telegram_id: int):
@@ -99,45 +182,7 @@ class Database:
                 WHERE u.telegram_id = $1
             """, telegram_id)
     
-    async def get_creator_debt(self, slug: str):
-        async with self.pool.acquire() as conn:
-            return await conn.fetchrow("""
-                SELECT 
-                    c.name,
-                    c.commission_rate,
-                    COALESCE(SUM(t.amount_received), 0) as total_received,
-                    COUNT(CASE WHEN t.status = 'APPROVED' THEN 1 END) as approved_count
-                FROM creators c
-                LEFT JOIN transactions t ON c.id = t.creator_id AND t.status = 'APPROVED'
-                WHERE c.slug = $1
-                GROUP BY c.id, c.name, c.commission_rate
-            """, slug)
-    
-    async def add_creator(self, slug: str, name: str, wallet_bsc: str, wallet_polygon: str, wallet_tron: str):
-        async with self.pool.acquire() as conn:
-            await conn.execute("""
-                INSERT INTO creators (slug, name, wallet_bsc, wallet_polygon, wallet_tron)
-                VALUES ($1, $2, $3, $4, $5)
-            """, slug, name, wallet_bsc, wallet_polygon, wallet_tron)
-    
-    async def link_creator_telegram(self, slug: str, telegram_id: int) -> bool:
-        async with self.pool.acquire() as conn:
-            result = await conn.execute("""
-                UPDATE creators 
-                SET telegram_id = $2
-                WHERE slug = $1
-            """, slug, telegram_id)
-            return result != "UPDATE 0"
-    
-    async def get_all_creators(self):
-        async with self.pool.acquire() as conn:
-            return await conn.fetch("""
-                SELECT id, slug, name, telegram_id, is_active
-                FROM creators
-                ORDER BY id DESC
-            """)
-    
-    # --- بخش اسپانسرینگ ---
+    # --- اسپانسرینگ ---
     async def add_lead(self, sponsor_name: str, contact: str, budget: str, desc: str, sponsor_tg_id: int, creator_id: int = None):
         async with self.pool.acquire() as conn:
             return await conn.fetchval("""

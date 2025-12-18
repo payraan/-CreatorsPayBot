@@ -131,6 +131,283 @@ async def reject_lead(callback: CallbackQuery):
     await callback.message.edit_text(f"{callback.message.text}\n\n❌ <b>رد شد.</b>", parse_mode="HTML")
 
 # --- دستورات ادمین ---
+@router.message(Command("help"))
+async def admin_help(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    
+    text = """🔧 <b>دستورات ادمین:</b>
+
+<b>مدیریت کریتورها:</b>
+/newcreator - اضافه کردن کریتور جدید
+/creators - لیست همه کریتورها
+/link_creator [slug] [tg_id] - لینک تلگرام
+/update_creator [slug] - آپدیت پروفایل
+/publish [slug] - انتشار در کاتالوگ
+
+<b>گزارشات:</b>
+/check_debt [slug] - بررسی بدهی کریتور
+
+<b>مثال:</b>
+<code>/link_creator skillvid 123456789</code>
+<code>/update_creator skillvid</code>"""
+    
+    await message.answer(text, parse_mode="HTML")
+
+@router.message(Command("newcreator"))
+async def new_creator(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    
+    lines = message.text.split('\n')
+    
+    if len(lines) < 2:
+        await message.answer("""📝 <b>اضافه کردن کریتور جدید</b>
+
+فرمت:
+<code>/newcreator
+slug: نام_انگلیسی
+name: نام نمایشی
+platform: YOUTUBE یا INSTAGRAM
+wallet_bsc: آدرس BSC
+wallet_polygon: آدرس Polygon
+wallet_tron: آدرس Tron</code>
+
+مثال:
+<code>/newcreator
+slug: chef_sara
+name: سرآشپز سارا
+platform: INSTAGRAM
+wallet_bsc: 0x123...
+wallet_polygon: 0x456...
+wallet_tron: TXyz...</code>""", parse_mode="HTML")
+        return
+    
+    try:
+        data = {}
+        for line in lines[1:]:
+            if ':' in line:
+                key, value = line.split(':', 1)
+                data[key.strip().lower()] = value.strip()
+        
+        required = ['slug', 'name', 'wallet_bsc', 'wallet_polygon', 'wallet_tron']
+        for field in required:
+            if field not in data:
+                await message.answer(f"❌ فیلد '{field}' وارد نشده.")
+                return
+        
+        platform = data.get('platform', 'YOUTUBE').upper()
+        if platform not in ['YOUTUBE', 'INSTAGRAM']:
+            platform = 'YOUTUBE'
+        
+        await db.add_creator(data['slug'], data['name'], data['wallet_bsc'], data['wallet_polygon'], data['wallet_tron'], platform)
+        
+        platform_emoji = "🔴" if platform == "YOUTUBE" else "📸"
+        
+        await message.answer(f"""✅ <b>کریتور جدید اضافه شد!</b>
+
+{platform_emoji} پلتفرم: {platform}
+📛 نام: {html.escape(data['name'])}
+🔗 لینک: <code>t.me/CreatorsPayBot?start={data['slug']}</code>
+
+<b>قدم‌های بعدی:</b>
+1️⃣ لینک تلگرام: <code>/link_creator {data['slug']} [tg_id]</code>
+2️⃣ آپدیت پروفایل: <code>/update_creator {data['slug']}</code>
+3️⃣ انتشار: <code>/publish {data['slug']}</code>""", parse_mode="HTML")
+    
+    except Exception as e:
+        await message.answer(f"❌ خطا: {html.escape(str(e))}")
+
+@router.message(Command("link_creator"))
+async def link_creator(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    
+    args = message.text.split()
+    if len(args) < 3:
+        await message.answer("""❌ استفاده: <code>/link_creator [slug] [telegram_id]</code>
+
+مثال: <code>/link_creator skillvid 123456789</code>
+
+💡 برای گرفتن telegram_id:
+از کریتور بخواهید به ربات @userinfobot پیام بدهد.""", parse_mode="HTML")
+        return
+    
+    slug = args[1]
+    try:
+        telegram_id = int(args[2])
+    except ValueError:
+        await message.answer("❌ telegram_id باید عدد باشد.")
+        return
+    
+    success = await db.link_creator_telegram(slug, telegram_id)
+    
+    if success:
+        await message.answer(f"""✅ <b>کریتور لینک شد!</b>
+
+📛 Slug: {html.escape(slug)}
+🆔 Telegram ID: {telegram_id}""", parse_mode="HTML")
+    else:
+        await message.answer(f"❌ کریتور با slug '{html.escape(slug)}' یافت نشد.")
+
+@router.message(Command("update_creator"))
+async def update_creator(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    
+    lines = message.text.split('\n')
+    args = lines[0].split()
+    
+    if len(args) < 2:
+        await message.answer("""📝 <b>آپدیت پروفایل کریتور</b>
+
+فرمت:
+<code>/update_creator [slug]
+category: gaming
+followers: 100000
+min_price: 50
+max_price: 200
+profile_link: youtube.com/@channel
+description: توضیحات کانال</code>
+
+دسته‌بندی‌ها:
+gaming, cooking, tech, education, entertainment, lifestyle, sports, music, travel, business""", parse_mode="HTML")
+        return
+    
+    slug = args[1]
+    creator = await db.get_creator_by_slug(slug)
+    
+    if not creator:
+        await message.answer(f"❌ کریتور با slug '{html.escape(slug)}' یافت نشد.")
+        return
+    
+    if len(lines) < 2:
+        await message.answer(f"""📝 <b>آپدیت {html.escape(creator['name'])}</b>
+
+فرمت:
+<code>/update_creator {slug}
+category: gaming
+followers: 100000
+min_price: 50
+max_price: 200
+profile_link: youtube.com/@channel
+description: توضیحات کانال</code>""", parse_mode="HTML")
+        return
+    
+    try:
+        data = {}
+        for line in lines[1:]:
+            if ':' in line:
+                key, value = line.split(':', 1)
+                data[key.strip().lower()] = value.strip()
+        
+        category = data.get('category', creator['category'])
+        followers = int(data.get('followers', creator['followers_count'] or 0))
+        min_price = int(data.get('min_price', creator['min_sponsor_price'] or 0))
+        max_price = int(data.get('max_price', creator['max_sponsor_price'] or 0))
+        profile_link = data.get('profile_link', creator['profile_link'] or '')
+        description = data.get('description', creator['description'] or '')
+        is_public = creator['is_public']
+        
+        await db.update_creator_profile(slug, category, followers, min_price, max_price, profile_link, description, is_public)
+        
+        await message.answer(f"""✅ <b>پروفایل آپدیت شد!</b>
+
+📛 کریتور: {html.escape(creator['name'])}
+📂 دسته: {category}
+👥 فالوور: {followers:,}
+💰 قیمت: {min_price}-{max_price} تتر
+
+برای انتشار در کاتالوگ: <code>/publish {slug}</code>""", parse_mode="HTML")
+    
+    except Exception as e:
+        await message.answer(f"❌ خطا: {html.escape(str(e))}")
+
+@router.message(Command("publish"))
+async def publish_creator(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    
+    args = message.text.split()
+    if len(args) < 2:
+        await message.answer("❌ استفاده: <code>/publish [slug]</code>", parse_mode="HTML")
+        return
+    
+    slug = args[1]
+    creator = await db.get_creator_by_slug(slug)
+    
+    if not creator:
+        await message.answer(f"❌ کریتور با slug '{html.escape(slug)}' یافت نشد.")
+        return
+    
+    # آپدیت is_public
+    await db.update_creator_profile(
+        slug,
+        creator['category'],
+        creator['followers_count'] or 0,
+        creator['min_sponsor_price'] or 0,
+        creator['max_sponsor_price'] or 0,
+        creator['profile_link'] or '',
+        creator['description'] or '',
+        True  # is_public = True
+    )
+    
+    await message.answer(f"""✅ <b>کریتور منتشر شد!</b>
+
+📛 {html.escape(creator['name'])} الان در کاتالوگ عمومی نمایش داده میشه.""", parse_mode="HTML")
+
+@router.message(Command("unpublish"))
+async def unpublish_creator(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    
+    args = message.text.split()
+    if len(args) < 2:
+        await message.answer("❌ استفاده: <code>/unpublish [slug]</code>", parse_mode="HTML")
+        return
+    
+    slug = args[1]
+    creator = await db.get_creator_by_slug(slug)
+    
+    if not creator:
+        await message.answer(f"❌ کریتور با slug '{html.escape(slug)}' یافت نشد.")
+        return
+    
+    await db.update_creator_profile(
+        slug,
+        creator['category'],
+        creator['followers_count'] or 0,
+        creator['min_sponsor_price'] or 0,
+        creator['max_sponsor_price'] or 0,
+        creator['profile_link'] or '',
+        creator['description'] or '',
+        False  # is_public = False
+    )
+    
+    await message.answer(f"✅ کریتور از کاتالوگ حذف شد.")
+
+@router.message(Command("creators"))
+async def list_creators(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    
+    creators = await db.get_all_creators()
+    
+    if not creators:
+        await message.answer("❌ هیچ کریتوری ثبت نشده.")
+        return
+    
+    text = "📋 <b>لیست کریتورها:</b>\n\n"
+    for c in creators:
+        platform = "🔴" if c['platform'] == 'YOUTUBE' else "📸"
+        linked = "✅" if c['telegram_id'] else "❌"
+        public = "🌐" if c['is_public'] else "🔒"
+        text += f"{platform} {public} {linked} <b>{html.escape(c['name'])}</b> ({c['slug']})\n"
+    
+    text += "\n🔴=یوتیوب 📸=اینستا | 🌐=عمومی 🔒=خصوصی | ✅=لینک‌شده ❌=بدون‌لینک"
+    
+    await message.answer(text, parse_mode="HTML")
+
 @router.message(Command("check_debt"))
 async def check_debt(message: Message):
     if message.from_user.id != ADMIN_ID:
@@ -145,127 +422,19 @@ async def check_debt(message: Message):
     debt_info = await db.get_creator_debt(slug)
     
     if not debt_info:
-        await message.answer(f"❌ یوتیوبر با slug '{html.escape(slug)}' یافت نشد.")
+        await message.answer(f"❌ کریتور با slug '{html.escape(slug)}' یافت نشد.")
         return
     
     total = float(debt_info['total_received']) if debt_info['total_received'] else 0
     rate = float(debt_info['commission_rate'])
     debt = total * (rate / 100)
     
-    text = f"""📊 گزارش مالی: {html.escape(debt_info['name'])}
+    text = f"""📊 <b>گزارش مالی: {html.escape(debt_info['name'])}</b>
 
 💰 کل دریافتی تایید شده: {total} USDT
 📈 نرخ کمیسیون: {rate}%
 💵 بدهی به پلتفرم: {debt:.2f} USDT
 
 📅 تعداد تراکنش‌های تایید شده: {debt_info['approved_count']}"""
-    
-    await message.answer(text)
-
-@router.message(Command("add_creator"))
-async def add_creator(message: Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    
-    await message.answer("""📝 برای اضافه کردن یوتیوبر، این فرمت رو بفرست:
-
-/newcreator
-slug: نام_انگلیسی
-name: نام نمایشی
-wallet_bsc: آدرس BSC
-wallet_polygon: آدرس Polygon
-wallet_tron: آدرس Tron
-
-مثال:
-/newcreator
-slug: skillvid
-name: اسکیل وید
-wallet_bsc: 0x123...
-wallet_polygon: 0x456...
-wallet_tron: TXyz...""")
-
-@router.message(Command("newcreator"))
-async def new_creator(message: Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    
-    try:
-        lines = message.text.split('\n')[1:]
-        data = {}
-        for line in lines:
-            if ':' in line:
-                key, value = line.split(':', 1)
-                data[key.strip().lower()] = value.strip()
-        
-        required = ['slug', 'name', 'wallet_bsc', 'wallet_polygon', 'wallet_tron']
-        for field in required:
-            if field not in data:
-                await message.answer(f"❌ فیلد '{field}' وارد نشده.")
-                return
-        
-        await db.add_creator(data['slug'], data['name'], data['wallet_bsc'], data['wallet_polygon'], data['wallet_tron'])
-        
-        await message.answer(f"""✅ یوتیوبر جدید اضافه شد!
-
-🔗 لینک: t.me/CreatorsPayBot?start={html.escape(data['slug'])}
-📛 نام: {html.escape(data['name'])}
-
-⚠️ برای فعال‌سازی اسپانسرشیپ، آیدی تلگرام یوتیوبر رو لینک کن:
-/link_creator {data['slug']} [telegram_id]""")
-    
-    except Exception as e:
-        await message.answer(f"❌ خطا: {html.escape(str(e))}")
-
-@router.message(Command("link_creator"))
-async def link_creator(message: Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    
-    args = message.text.split()
-    if len(args) < 3:
-        await message.answer("""❌ استفاده: /link_creator [slug] [telegram_id]
-
-مثال: /link_creator skillvid 123456789
-
-💡 برای گرفتن telegram_id یوتیوبر:
-از یوتیوبر بخواهید به ربات @userinfobot پیام بدهد.""")
-        return
-    
-    slug = args[1]
-    try:
-        telegram_id = int(args[2])
-    except ValueError:
-        await message.answer("❌ telegram_id باید عدد باشد.")
-        return
-    
-    success = await db.link_creator_telegram(slug, telegram_id)
-    
-    if success:
-        await message.answer(f"""✅ یوتیوبر لینک شد!
-
-📛 Slug: {html.escape(slug)}
-🆔 Telegram ID: {telegram_id}
-
-الان پیشنهادات اسپانسرشیپ مستقیم به یوتیوبر ارسال میشه.""")
-    else:
-        await message.answer(f"❌ یوتیوبر با slug '{html.escape(slug)}' یافت نشد.")
-
-@router.message(Command("creators"))
-async def list_creators(message: Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    
-    creators = await db.get_all_creators()
-    
-    if not creators:
-        await message.answer("❌ هیچ یوتیوبری ثبت نشده.")
-        return
-    
-    text = "📋 <b>لیست یوتیوبرها:</b>\n\n"
-    for c in creators:
-        linked = "✅" if c['telegram_id'] else "❌"
-        text += f"{linked} <b>{html.escape(c['name'])}</b> ({c['slug']})\n"
-    
-    text += "\n✅ = لینک شده | ❌ = بدون telegram_id"
     
     await message.answer(text, parse_mode="HTML")
