@@ -93,9 +93,10 @@ async def finish_sponsorship(message: Message, state: FSMContext, bot: Bot):
 📝 <b>توضیحات:</b>
 {html.escape(message.text)}"""
 
+    # یکسان‌سازی callback data با پیشوند admin:lead:
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ تایید و ارسال به یوتیوبر", callback_data=f"lead:approve:{lead_id}")],
-        [InlineKeyboardButton(text="❌ رد درخواست", callback_data=f"lead:reject:{lead_id}")]
+        [InlineKeyboardButton(text="✅ تایید و ارسال به یوتیوبر", callback_data=f"admin:lead:approve:{lead_id}")],
+        [InlineKeyboardButton(text="❌ رد درخواست", callback_data=f"admin:lead:reject:{lead_id}")]
     ])
     
     await bot.send_message(ADMIN_CHAT_ID, admin_text, reply_markup=kb, parse_mode="HTML")

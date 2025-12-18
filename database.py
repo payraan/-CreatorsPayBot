@@ -120,6 +120,23 @@ class Database:
                 VALUES ($1, $2, $3, $4, $5)
             """, slug, name, wallet_bsc, wallet_polygon, wallet_tron)
     
+    async def link_creator_telegram(self, slug: str, telegram_id: int) -> bool:
+        async with self.pool.acquire() as conn:
+            result = await conn.execute("""
+                UPDATE creators 
+                SET telegram_id = $2
+                WHERE slug = $1
+            """, slug, telegram_id)
+            return result != "UPDATE 0"
+    
+    async def get_all_creators(self):
+        async with self.pool.acquire() as conn:
+            return await conn.fetch("""
+                SELECT id, slug, name, telegram_id, is_active
+                FROM creators
+                ORDER BY id DESC
+            """)
+    
     # --- بخش اسپانسرینگ ---
     async def add_lead(self, sponsor_name: str, contact: str, budget: str, desc: str, sponsor_tg_id: int, creator_id: int = None):
         async with self.pool.acquire() as conn:

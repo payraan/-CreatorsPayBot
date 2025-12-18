@@ -7,12 +7,27 @@ from database import db
 
 router = Router()
 
-def get_admin_keyboard(ref_code: str):
+# --- کیبوردهای ادمین ---
+def get_tx_admin_keyboard(ref_code: str):
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ تایید", callback_data=f"adm:approve:{ref_code}")],
-        [InlineKeyboardButton(text="❌ رد", callback_data=f"adm:reject:{ref_code}")]
+        [InlineKeyboardButton(text="✅ تایید", callback_data=f"admin:tx:approve:{ref_code}")],
+        [InlineKeyboardButton(text="❌ رد", callback_data=f"admin:tx:reject:{ref_code}")]
     ])
 
+def get_lead_admin_keyboard(lead_id: int):
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ تایید و ارسال به یوتیوبر", callback_data=f"admin:lead:approve:{lead_id}")],
+        [InlineKeyboardButton(text="❌ رد درخواست", callback_data=f"admin:lead:reject:{lead_id}")]
+    ])
+
+# --- چک امنیتی ادمین ---
+async def check_admin(callback: CallbackQuery) -> bool:
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔ شما دسترسی ادمین ندارید!", show_alert=True)
+        return False
+    return True
+
+# --- نوتیفیکیشن دونیت به ادمین ---
 async def notify_admin(bot: Bot, user_id: int, username: str, creator_name: str, amount: float, network: str, ref_code: str, proof_type: str, proof_value: str):
     user_display = f"@{username}" if username else "بدون یوزرنیم"
     
@@ -27,14 +42,18 @@ async def notify_admin(bot: Bot, user_id: int, username: str, creator_name: str,
 🧾 مدرک ارسال شده: {proof_type}"""
 
     if proof_type == "SCREENSHOT":
-        await bot.send_photo(ADMIN_CHAT_ID, proof_value, caption=text, reply_markup=get_admin_keyboard(ref_code))
+        await bot.send_photo(ADMIN_CHAT_ID, proof_value, caption=text, reply_markup=get_tx_admin_keyboard(ref_code))
     else:
         text += f"\n{html.escape(proof_value)}"
-        await bot.send_message(ADMIN_CHAT_ID, text, reply_markup=get_admin_keyboard(ref_code))
+        await bot.send_message(ADMIN_CHAT_ID, text, reply_markup=get_tx_admin_keyboard(ref_code))
 
-@router.callback_query(F.data.startswith("adm:approve:"))
+# --- هندلرهای تایید/رد دونیت ---
+@router.callback_query(F.data.startswith("admin:tx:approve:"))
 async def approve_transaction(callback: CallbackQuery, bot: Bot):
-    ref_code = callback.data.split(":")[2]
+    if not await check_admin(callback):
+        return
+    
+    ref_code = callback.data.split(":")[3]
     
     await db.approve_transaction(ref_code)
     tx = await db.get_transaction_by_ref(ref_code)
@@ -49,9 +68,12 @@ async def approve_transaction(callback: CallbackQuery, bot: Bot):
     await callback.answer("✅ تایید شد!")
     await callback.message.edit_reply_markup(reply_markup=None)
 
-@router.callback_query(F.data.startswith("adm:reject:"))
+@router.callback_query(F.data.startswith("admin:tx:reject:"))
 async def reject_transaction(callback: CallbackQuery, bot: Bot):
-    ref_code = callback.data.split(":")[2]
+    if not await check_admin(callback):
+        return
+    
+    ref_code = callback.data.split(":")[3]
     
     await db.reject_transaction(ref_code)
     tx = await db.get_transaction_by_ref(ref_code)
@@ -65,6 +87,50 @@ async def reject_transaction(callback: CallbackQuery, bot: Bot):
     await callback.answer("❌ رد شد!")
     await callback.message.edit_reply_markup(reply_markup=None)
 
+# --- هندلرهای تایید/رد اسپانسرشیپ ---
+@router.callback_query(F.data.startswith("admin:lead:approve:"))
+async def approve_lead(callback: CallbackQuery, bot: Bot):
+    if not await check_admin(callback):
+        return
+    
+    lead_id = int(callback.data.split(":")[3])
+    lead = await db.get_lead(lead_id)
+    
+    if lead['creator_tg_id']:
+        text_creator = f"""🎉 <b>پیشنهاد همکاری جدید!</b>
+
+یک برند تمایل به همکاری با شما دارد.
+
+🏢 <b>برند:</b> {html.escape(lead['sponsor_name'])}
+💰 <b>بودجه:</b> {lead['budget_range']}
+📝 <b>توضیحات:</b> {html.escape(lead['description'] or '')}
+
+👇 برای هماهنگی و پذیرش، به پشتیبانی پیام دهید:
+@Narmoon_support"""
+        
+        try:
+            await bot.send_message(lead['creator_tg_id'], text_creator, parse_mode="HTML")
+            await db.update_lead_status(lead_id, "SENT_TO_CREATOR")
+            await callback.answer("✅ ارسال شد!")
+            await callback.message.edit_text(f"{callback.message.text}\n\n✅ <b>تایید و برای {html.escape(lead['creator_name'] or '')} ارسال شد.</b>", parse_mode="HTML")
+        except Exception as e:
+            await callback.answer(f"خطا در ارسال: {str(e)}", show_alert=True)
+    else:
+        await db.update_lead_status(lead_id, "APPROVED_GENERAL")
+        await callback.answer("✅ تایید شد!")
+        await callback.message.edit_text(f"{callback.message.text}\n\n⚠️ <b>تایید شد اما یوتیوبر telegram_id ندارد.</b>\nاول /link_creator بزنید.", parse_mode="HTML")
+
+@router.callback_query(F.data.startswith("admin:lead:reject:"))
+async def reject_lead(callback: CallbackQuery):
+    if not await check_admin(callback):
+        return
+    
+    lead_id = int(callback.data.split(":")[3])
+    await db.update_lead_status(lead_id, "REJECTED")
+    await callback.answer("❌ رد شد!")
+    await callback.message.edit_text(f"{callback.message.text}\n\n❌ <b>رد شد.</b>", parse_mode="HTML")
+
+# --- دستورات ادمین ---
 @router.message(Command("check_debt"))
 async def check_debt(message: Message):
     if message.from_user.id != ADMIN_ID:
@@ -142,45 +208,64 @@ async def new_creator(message: Message):
         await message.answer(f"""✅ یوتیوبر جدید اضافه شد!
 
 🔗 لینک: t.me/CreatorsPayBot?start={html.escape(data['slug'])}
-📛 نام: {html.escape(data['name'])}""")
+📛 نام: {html.escape(data['name'])}
+
+⚠️ برای فعال‌سازی اسپانسرشیپ، آیدی تلگرام یوتیوبر رو لینک کن:
+/link_creator {data['slug']} [telegram_id]""")
     
     except Exception as e:
         await message.answer(f"❌ خطا: {html.escape(str(e))}")
 
-# --- بخش اسپانسرینگ ---
-@router.callback_query(F.data.startswith("lead:approve:"))
-async def approve_lead(callback: CallbackQuery, bot: Bot):
-    lead_id = int(callback.data.split(":")[2])
+@router.message(Command("link_creator"))
+async def link_creator(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return
     
-    lead = await db.get_lead(lead_id)
+    args = message.text.split()
+    if len(args) < 3:
+        await message.answer("""❌ استفاده: /link_creator [slug] [telegram_id]
+
+مثال: /link_creator skillvid 123456789
+
+💡 برای گرفتن telegram_id یوتیوبر:
+از یوتیوبر بخواهید به ربات @userinfobot پیام بدهد.""")
+        return
     
-    if lead['creator_tg_id']:
-        text_creator = f"""🎉 <b>پیشنهاد همکاری جدید!</b>
+    slug = args[1]
+    try:
+        telegram_id = int(args[2])
+    except ValueError:
+        await message.answer("❌ telegram_id باید عدد باشد.")
+        return
+    
+    success = await db.link_creator_telegram(slug, telegram_id)
+    
+    if success:
+        await message.answer(f"""✅ یوتیوبر لینک شد!
 
-یک برند تمایل به همکاری با شما دارد.
+📛 Slug: {html.escape(slug)}
+🆔 Telegram ID: {telegram_id}
 
-🏢 <b>برند:</b> {html.escape(lead['sponsor_name'])}
-💰 <b>بودجه:</b> {lead['budget_range']}
-📝 <b>توضیحات:</b> {html.escape(lead['description'] or '')}
-
-👇 برای هماهنگی و پذیرش، به پشتیبانی پیام دهید:
-@Narmoon_support"""
-        
-        try:
-            await bot.send_message(lead['creator_tg_id'], text_creator, parse_mode="HTML")
-            await db.update_lead_status(lead_id, "SENT_TO_CREATOR")
-            await callback.answer("✅ ارسال شد!")
-            await callback.message.edit_text(f"{callback.message.text}\n\n✅ <b>تایید و برای {html.escape(lead['creator_name'] or '')} ارسال شد.</b>", parse_mode="HTML")
-        except Exception as e:
-            await callback.answer(f"خطا در ارسال: {str(e)}", show_alert=True)
+الان پیشنهادات اسپانسرشیپ مستقیم به یوتیوبر ارسال میشه.""")
     else:
-        await db.update_lead_status(lead_id, "APPROVED_GENERAL")
-        await callback.answer("✅ تایید شد!")
-        await callback.message.edit_text(f"{callback.message.text}\n\n✅ <b>تایید شد (عمومی).</b>\nادمین دستی پیگیری کند.", parse_mode="HTML")
+        await message.answer(f"❌ یوتیوبر با slug '{html.escape(slug)}' یافت نشد.")
 
-@router.callback_query(F.data.startswith("lead:reject:"))
-async def reject_lead(callback: CallbackQuery):
-    lead_id = int(callback.data.split(":")[2])
-    await db.update_lead_status(lead_id, "REJECTED")
-    await callback.answer("❌ رد شد!")
-    await callback.message.edit_text(f"{callback.message.text}\n\n❌ <b>رد شد.</b>", parse_mode="HTML")
+@router.message(Command("creators"))
+async def list_creators(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    
+    creators = await db.get_all_creators()
+    
+    if not creators:
+        await message.answer("❌ هیچ یوتیوبری ثبت نشده.")
+        return
+    
+    text = "📋 <b>لیست یوتیوبرها:</b>\n\n"
+    for c in creators:
+        linked = "✅" if c['telegram_id'] else "❌"
+        text += f"{linked} <b>{html.escape(c['name'])}</b> ({c['slug']})\n"
+    
+    text += "\n✅ = لینک شده | ❌ = بدون telegram_id"
+    
+    await message.answer(text, parse_mode="HTML")
